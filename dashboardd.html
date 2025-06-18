@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>لوحة تحكم الجهة</title>
+  <style>
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+    h1, h2 {
+      color: #006666;
+    }
+    label {
+      font-weight: bold;
+      margin-top: 15px;
+      display: block;
+    }
+    input, textarea, button, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      background-color: #008080;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background-color: #006666;
+    }
+    .volunteer-item {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background-color: white;
+    }
+  </style>
+</head>
+<body>
+
+
+    <!-- ✅ الترحيب -->
+    <h1>لوحة تحكم الجهة</h1>
+    <p id="welcome">جاري تحميل البيانات...</p>
+
+    <!-- ✅ نموذج إنشاء فرصة -->
+    <h2>إنشاء فرصة تطوعية جديدة</h2>
+    <form id="opportunityForm">
+      <label>عنوان الفرصة:</label>
+      <input type="text" id="title" required>
+
+      <label>وصف الفرصة:</label>
+      <textarea id="description" rows="3" required></textarea>
+
+      <label>عدد المتطوعين المطلوب:</label>
+      <input type="number" id="maxApplicants" min="1" required>
+
+      <button type="submit">نشر الفرصة</button>
+    </form>
+
+    <!-- ✅ عرض الطلبات -->
+    <h2>طلبات المتطوعين</h2>
+    <div id="requestsList">جاري التحميل...</div>
+
+    <!-- ✅ Firebase -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+      import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+      import { getFirestore, collection, addDoc, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+      import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAlMibtDbLAZLMhhJNho5Sih_qBfWxZyXI",
+        authDomain: "momaken-45ba9.firebaseapp.com",
+        projectId: "momaken-45ba9",
+        storageBucket: "momaken-45ba9.appspot.com",
+        messagingSenderId: "638133555280",
+        appId: "1:638133555280:web:c84bd87c15cabe55d30155"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+      const functions = getFunctions(app);
+
+      let currentUser = null;
+
+      // ✅ التحقق من تسجيل الدخول
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) return window.location.href = "login.html";
+        currentUser = user;
+        document.getElementById("welcome").textContent = `مرحبًا ${user.email}`;
+        loadRequests();
+      });
+
+      // ✅ إنشاء فرصة جديدة
+      document.getElementById("opportunityForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const title = document.getElementById("title").value;
+        const description = document.getElementById("description").value;
+        const maxApplicants = parseInt(document.getElementById("maxApplicants").value);
+
+        await addDoc(collection(db, "opportunities"), {
+          title,
+          description,
+          maxApplicants,
+          createdBy: currentUser.uid,
+          createdAt: new Date()
+        });
+
+        alert("✅ تم نشر الفرصة بنجاح");
+        e.target.reset();
+      });
+
+      // ✅ تحميل الطلبات
+      async function loadRequests() {
+        const q = query(collection(db, "volunteerRequests"), where("organizationId", "==", currentUser.uid));
+        const snapshot = await getDocs(q);
+        const list = document.getElementById("requestsList");
+        list.innerHTML = "";
+
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          const div = document.createElement("div");
+          div.className = "volunteer-item";
+          div.innerHTML = `
+            <p><strong>الاسم:</strong> ${data.name || "غير معروف"}</p>
+            <p><strong>البريد:</strong> ${data.email}</p>
+            <p><strong>الفرصة:</strong> ${data.opportunityTitle}</p>
+            <button onclick="approveVolunteer('${docSnap.id}', '${data.uid}', '${data.email}', '${data.opportunityTitle}', this)">قبول + إصدار شهادة</button>
+          `;
+          list.appendChild(div);
+        });
+      }
+
+      // ✅ الموافقة + إصدار شهادة
+      window.approveVolunteer = async (docId, uid, email, opportunityTitle, btn) => {
+        btn.disabled = true;
+        btn.textContent = "جاري المعالجة...";
+
+        try {
+          await updateDoc(doc(db, "volunteerRequests", docId), { status: "مقبول" });
+          const sendCert = httpsCallable(functions, "sendVolunteerCertificate");
+          await sendCert({ uid, email, title: opportunityTitle });
+          alert("✅ تم قبول المتطوع وإرسال الشهادة");
+        } catch (err) {
+          console.error(err);
+          alert("❌ حدث خطأ أثناء إرسال الشهادة");
+        }
+
+        btn.disabled = false;
+        btn.textContent = "تم القبول ✔️";
+        loadRequests(); // إعادة تحميل الطلبات
+      };
+    </script>
+
+  </body>
+  </htm

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>تقييم فرصة تطوعية</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+</head>
+<body>
+  <div class="wrapper">
+    <h1>تقييم فرصة تطوعية</h1>
+    <form id="rating-form">
+      <label for="opportunity">اختر الفرصة:</label><br>
+      <select id="opportunity" required></select><br><br>
+
+      <label for="rating">عدد النجوم (من 1 إلى 5):</label><br>
+      <input type="number" id="rating" min="1" max="5" required><br><br>
+
+      <label for="comments">ملاحظات:</label><br>
+      <textarea id="comments" rows="3" placeholder="شاركنا رأيك..."></textarea><br><br>
+
+      <button type="submit" class="btn">إرسال التقييم</button>
+    </form>
+  </div>
+
+  <footer class="bottom-nav">
+    <a href="opportunities.html">🏠</a>
+    <a href="favorites.html">❤️</a>
+    <a href="chat.html">💬</a>
+    <a href="my-requests.html">📝</a>
+    <a href="profile.html">👤</a>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const firebaseConfig = {
+        apiKey: "AIzaSyAlMibtDbLAZLMhhJNho5Sih_qBfWxZyXI",
+        authDomain: "momaken-45ba9.firebaseapp.com",
+        projectId: "momaken-45ba9",
+        storageBucket: "momaken-45ba9.appspot.com",
+        messagingSenderId: "638133555280",
+        appId: "1:638133555280:web:c84bd87c15cabe55d30155"
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+
+      const opportunitySelect = document.getElementById("opportunity");
+      const form = document.getElementById("rating-form");
+
+      auth.onAuthStateChanged(async (user) => {
+        if (!user) {
+          window.location.href = "login.html";
+          return;
+        }
+
+        try {
+          const snapshot = await db.collection("users").doc(user.uid).collection("applied").get();
+
+          if (snapshot.empty) {
+            opportunitySelect.innerHTML = '<option disabled>لا توجد فرص للتقييم</option>';
+            form.querySelector('button').disabled = true;
+            return;
+          }
+
+          snapshot.forEach(doc => {
+            const op = doc.data();
+            const option = document.createElement("option");
+            option.value = op.title;
+            option.textContent = op.title;
+            opportunitySelect.appendChild(option);
+          });
+
+          form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const rating = parseInt(document.getElementById("rating").value);
+            const comments = document.getElementById("comments").value.trim();
+            const opportunity = opportunitySelect.value;
+
+            if (!opportunity || !rating || rating < 1 || rating > 5) {
+              alert("يرجى إدخال تقييم صالح بين 1 و 5 واختيار الفرصة.");
+              return;
+            }
+
+            await db.collection("users").doc(user.uid).collection("ratings").add({
+              opportunity,
+              rating,
+              comments,
+              date: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            alert("✅ تم إرسال تقييمك بنجاح");
+            form.reset();
+          });
+
+        } catch (error) {
+          console.error("حدث خطأ أثناء تحميل الفرص:", error);
+          alert("⚠ حدث خطأ أثناء تحميل البيانات، حاول لاحقًا.");
+        }
+      });
+    });
+  </script>
+</body>
+</html>

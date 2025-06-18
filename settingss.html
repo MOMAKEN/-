@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>إعدادات الحساب</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+    }
+    input[type="text"],
+    input[type="email"] {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+    .interests {
+      margin-bottom: 15px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+  <body>
+
+    <h2>إعدادات الحساب</h2>
+    <form id="settingsForm">
+      <label>الاسم:</label>
+      <input type="text" id="name" required>
+
+      <label>البريد الإلكتروني:</label>
+      <input type="email" id="email" required>
+
+      <label>اهتماماتك:</label>
+      <div class="interests">
+        <label><input type="checkbox" name="interest" value="بيئة"> بيئة</label>
+        <label><input type="checkbox" name="interest" value="تعليم"> تعليم</label>
+        <label><input type="checkbox" name="interest" value="صحة"> صحة</label>
+        <label><input type="checkbox" name="interest" value="برمجة"> برمجة</label>
+      </div>
+
+      <button type="submit">حفظ التعديلات</button>
+    </form>
+
+    <!-- سكربت Firebase -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+      import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+      import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAlMibtDbLAZLMhhJNho5Sih_qBfWxZyXI",
+        authDomain: "momaken-45ba9.firebaseapp.com",
+        projectId: "momaken-45ba9",
+        storageBucket: "momaken-45ba9.appspot.com",
+        messagingSenderId: "638133555280",
+        appId: "1:638133555280:web:c84bd87c15cabe55d30155"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+
+      let currentUser = null;
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          alert("يرجى تسجيل الدخول أولاً.");
+          window.location.href = "login.html";
+          return;
+        }
+
+        currentUser = user;
+
+        const docRef = doc(db, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          document.getElementById("name").value = data.name || "";
+          document.getElementById("email").value = data.email || "";
+
+          const interests = data.interests || [];
+          interests.forEach(value => {
+            const checkbox = document.querySelector(`input[name="interest"][value="${value}"]`);
+            if (checkbox) checkbox.checked = true;
+          });
+        } else {
+          document.getElementById("email").value = user.email;
+        }
+      });
+
+      document.getElementById("settingsForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const name = document.getElementById("name").value.trim();
+        const email = document.getElementById("email").value.trim();
+        const interestCheckboxes = document.querySelectorAll('input[name="interest"]:checked');
+        const interests = Array.from(interestCheckboxes).map(cb => cb.value);
+
+        try {
+          await setDoc(doc(db, "users", currentUser.uid), {
+            name,
+            email,
+            interests
+          }, { merge: true });
+
+          alert("✅ تم حفظ التعديلات بنجاح");
+        } catch (error) {
+          console.error("خطأ في الحفظ:", error);
+          alert("⚠ حدث خطأ أثناء الحفظ، حاول لاحقاً.");
+        }
+      });
+    </script>
+
+  </body>
+  </html>
